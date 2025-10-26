@@ -1,0 +1,52 @@
+Timestamp,Stock,Current_Price,Next_10_Days_Prediction
+2025-10-27 03:15:42,AAPL,262.82,"$262.30, $264.15, $260.90, $262.27, $264.56, $267.05, $264.44, $266.12, $267.19, $268.43"
+Model Metrics,Accuracy,64.87%,
+Model Metrics,Error Rate,35.13%,
+Model Metrics,MAE,73.6927,
+Model Metrics,MSE,6145.1655,
+Model Metrics,R² Score,-7.7105,
+Trend Analysis,Market Trend,Strong Bullish,Profit Probability: 70%
+--- HISTORICAL DATA (Last 30 Days) ---,,,
+2025-09-15,Historical,236.70,N/A
+2025-09-16,Historical,238.15,$+1.45 (+0.61%)
+2025-09-17,Historical,238.99,$+0.84 (+0.35%)
+2025-09-18,Historical,237.88,$-1.11 (-0.46%)
+2025-09-19,Historical,245.50,$+7.62 (+3.20%)
+2025-09-22,Historical,256.08,$+10.58 (+4.31%)
+2025-09-23,Historical,254.43,$-1.65 (-0.64%)
+2025-09-24,Historical,252.31,$-2.12 (-0.83%)
+2025-09-25,Historical,256.87,$+4.56 (+1.81%)
+2025-09-26,Historical,255.46,$-1.41 (-0.55%)
+2025-09-29,Historical,254.43,$-1.03 (-0.40%)
+2025-09-30,Historical,254.63,$+0.20 (+0.08%)
+2025-10-01,Historical,255.45,$+0.82 (+0.32%)
+2025-10-02,Historical,257.13,$+1.68 (+0.66%)
+2025-10-03,Historical,258.02,$+0.89 (+0.35%)
+2025-10-06,Historical,256.69,$-1.33 (-0.52%)
+2025-10-07,Historical,256.48,$-0.21 (-0.08%)
+2025-10-08,Historical,258.06,$+1.58 (+0.62%)
+2025-10-09,Historical,254.04,$-4.02 (-1.56%)
+2025-10-10,Historical,245.27,$-8.77 (-3.45%)
+2025-10-13,Historical,247.66,$+2.39 (+0.97%)
+2025-10-14,Historical,247.77,$+0.11 (+0.04%)
+2025-10-15,Historical,249.34,$+1.57 (+0.63%)
+2025-10-16,Historical,247.45,$-1.89 (-0.76%)
+2025-10-17,Historical,252.29,$+4.84 (+1.96%)
+2025-10-20,Historical,262.24,$+9.95 (+3.94%)
+2025-10-21,Historical,262.77,$+0.53 (+0.20%)
+2025-10-22,Historical,258.45,$-4.32 (-1.64%)
+2025-10-23,Historical,259.58,$+1.13 (+0.44%)
+2025-10-24,Historical,262.82,$+3.24 (+1.25%)
+--- PREDICTIONS (Next 10 Days) ---,,,
+2025-10-25,Day 1 Prediction,262.30,$-0.52 (-0.20%) - Loss
+2025-10-26,Day 2 Prediction,264.15,$+1.84 (+0.70%) - Profit
+2025-10-27,Day 3 Prediction,260.90,$-3.25 (-1.23%) - Loss
+2025-10-28,Day 4 Prediction,262.27,$+1.38 (+0.53%) - Profit
+2025-10-29,Day 5 Prediction,264.56,$+2.29 (+0.87%) - Profit
+2025-10-30,Day 6 Prediction,267.05,$+2.49 (+0.94%) - Profit
+2025-10-31,Day 7 Prediction,264.44,$-2.62 (-0.98%) - Loss
+2025-11-01,Day 8 Prediction,266.12,$+1.68 (+0.64%) - Profit
+2025-11-02,Day 9 Prediction,267.19,$+1.07 (+0.40%) - Profit
+2025-11-03,Day 10 Prediction,268.43,$+1.24 (+0.46%) - Profit
+--- SUMMARY ---,,,
+Total Predicted Change,$+5.61,+2.13%,Final Price: $268.43

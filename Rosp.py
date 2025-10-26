@@ -464,8 +464,7 @@ for i in range(10):
 # Create future predictions dataframe
 future_df = pd.DataFrame({
     'Date': [d.strftime('%Y-%m-%d') for d in recursive_dates],
-    'Predicted Price': [f"${p:.2f}" for p in future_predictions],
-    'Daily Change': [f"${(future_predictions[i] - (current_price if i == 0 else future_predictions[i-1])):+.2f}" for i in range(10)]
+    'Predicted Price': [f"${p:.2f}" for p in future_predictions]
 })
 
 st.dataframe(future_df, use_container_width=True)
@@ -727,5 +726,5 @@ if os.path.exists(model_file):
 # Display prediction constraints
 st.sidebar.markdown("---")
 st.sidebar.subheader("Prediction Settings")
-st.sidebar.info("✅ Daily change range: **$0.50 - $5.00**")
+# st.sidebar.info("✅ Daily change range: **$0.50 - $5.00**")
 st.sidebar.info("📊 Based on market volatility")

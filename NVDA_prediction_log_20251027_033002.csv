@@ -1,0 +1,2 @@
+Timestamp,Stock,Current_Price,Current_Day_Prediction,Accuracy_Rate,Error_Rate,Date_1,Price_1,Date_2,Price_2,Date_3,Price_3,Date_4,Price_4,Date_5,Price_5,Date_6,Price_6,Date_7,Price_7,Date_8,Price_8,Date_9,Price_9,Date_10,Price_10
+2025-10-27 03:30:02,NVDA,186.26,188.33,23.98%,76.02%,2025-10-25,188.33,2025-10-26,183.84,2025-10-27,179.67,2025-10-28,176.03,2025-10-29,172.26,2025-10-30,168.98,2025-10-31,171.36,2025-11-01,173.05,2025-11-02,170.31,2025-11-03,172.76

@@ -474,7 +474,7 @@ for i, (date, price) in enumerate(zip(recursive_dates, future_predictions)):
     future_df_data.append({
         'Date': date.strftime('%Y-%m-%d'),
         'Predicted Price': f"${price:.2f}",
-        # 'Daily Change': f"${change:+.2f}"
+        'Daily Change': f"${change:+.2f}"
     })
 
 future_df = pd.DataFrame(future_df_data)
@@ -570,85 +570,78 @@ else:
     st.info("📊 No significant gain or loss expected.")
 
 # ------------------------
-# Create Comprehensive Prediction Log CSV
+# Download Historical Dataset with Proper Structure
 # ------------------------
-st.subheader("✅ Prediction Log")
+st.subheader("📥 Download Files")
+
+# Create historical dataset CSV with proper structure
+csv_file_path = f"{stock}_dataset.csv"
+historical_export = df.copy()
+historical_export = historical_export.reset_index()
+historical_export.columns = ['Date', 'Close']
+historical_export['Date'] = historical_export['Date'].dt.strftime('%Y-%m-%d')
+historical_export.to_csv(csv_file_path, index=False)
+
+with open(csv_file_path, 'rb') as f:
+    st.download_button(
+        label="📥 Download Historical Dataset",
+        data=f,
+        file_name=csv_file_path,
+        mime='text/csv'
+    )
+
+# ------------------------
+# Create Prediction Log CSV with 30-Day History + Future Predictions
+# ------------------------
+st.subheader("✅ Prediction Log (30-Day History + 10-Day Forecast)")
 
 # Create unique filename with timestamp
 log_file = f"{stock}_prediction_log_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 prediction_timestamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-# Get last 30 days of historical data
-last_30_days = df.tail(30).copy().reset_index()
+# Build prediction log with all data
+log_records = []
 
-# Build comprehensive prediction log
-log_data = []
-
-# Add timestamp row
-log_data.append({
+# ========================================
+# SECTION 1: METADATA ROW
+# ========================================
+metadata_record = {
     'Timestamp': prediction_timestamp,
     'Stock': stock,
     'Current_Price': f"{current_price:.2f}",
-    'Next_10_Days_Prediction': ', '.join([f"${p:.2f}" for p in future_predictions])
-})
+    'Current_Day_Prediction': f"{next_day_prediction:.2f}",
+    'Accuracy_Rate': f"{test_accuracy:.2f}%",
+    'Error_Rate': f"{test_mape:.2f}%",
+    'Market_Trend': trend_bias,
+    'Profit_Probability': f"{profit_probability*100:.0f}%"
+}
+log_records.append(metadata_record)
 
-# Add model accuracy metrics
-log_data.append({
-    'Timestamp': 'Model Metrics',
-    'Stock': 'Accuracy',
-    'Current_Price': f"{test_accuracy:.2f}%",
-    'Next_10_Days_Prediction': ''
-})
-
-log_data.append({
-    'Timestamp': 'Model Metrics',
-    'Stock': 'Error Rate',
-    'Current_Price': f"{test_mape:.2f}%",
-    'Next_10_Days_Prediction': ''
-})
-
-log_data.append({
-    'Timestamp': 'Model Metrics',
-    'Stock': 'MAE',
-    'Current_Price': f"{test_mae:.4f}",
-    'Next_10_Days_Prediction': ''
-})
-
-log_data.append({
-    'Timestamp': 'Model Metrics',
-    'Stock': 'MSE',
-    'Current_Price': f"{test_mse:.4f}",
-    'Next_10_Days_Prediction': ''
-})
-
-log_data.append({
-    'Timestamp': 'Model Metrics',
-    'Stock': 'R² Score',
-    'Current_Price': f"{test_r2:.4f}",
-    'Next_10_Days_Prediction': ''
-})
-
-# Add trend analysis
-log_data.append({
-    'Timestamp': 'Trend Analysis',
-    'Stock': 'Market Trend',
-    'Current_Price': trend_bias,
-    'Next_10_Days_Prediction': f"Profit Probability: {profit_probability*100:.0f}%"
-})
-
-# Add separator
-log_data.append({
+# ========================================
+# SECTION 2: SEPARATOR ROW
+# ========================================
+separator_record = {
     'Timestamp': '--- HISTORICAL DATA (Last 30 Days) ---',
     'Stock': '',
     'Current_Price': '',
-    'Next_10_Days_Prediction': ''
-})
+    'Current_Day_Prediction': '',
+    'Accuracy_Rate': '',
+    'Error_Rate': '',
+    'Market_Trend': '',
+    'Profit_Probability': ''
+}
+log_records.append(separator_record)
 
-# Add last 30 days historical data
+# ========================================
+# SECTION 3: LAST 30 DAYS HISTORICAL DATA
+# ========================================
+last_30_days = df.tail(30).copy().reset_index()
+
 for idx, row in last_30_days.iterrows():
     hist_price = row['Close']
     hist_date = row['Date'].strftime('%Y-%m-%d')
     
+    # Calculate daily change
     if idx > 0:
         prev_price = last_30_days.iloc[idx-1]['Close']
         change = hist_price - prev_price
@@ -657,22 +650,36 @@ for idx, row in last_30_days.iterrows():
     else:
         change_info = "N/A"
     
-    log_data.append({
+    hist_record = {
         'Timestamp': hist_date,
         'Stock': 'Historical',
         'Current_Price': f"{hist_price:.2f}",
-        'Next_10_Days_Prediction': change_info
-    })
+        'Current_Day_Prediction': change_info,
+        'Accuracy_Rate': '',
+        'Error_Rate': '',
+        'Market_Trend': '',
+        'Profit_Probability': ''
+    }
+    log_records.append(hist_record)
 
-# Add separator
-log_data.append({
+# ========================================
+# SECTION 4: SEPARATOR ROW
+# ========================================
+separator_record_2 = {
     'Timestamp': '--- PREDICTIONS (Next 10 Days) ---',
     'Stock': '',
     'Current_Price': '',
-    'Next_10_Days_Prediction': ''
-})
+    'Current_Day_Prediction': '',
+    'Accuracy_Rate': '',
+    'Error_Rate': '',
+    'Market_Trend': '',
+    'Profit_Probability': ''
+}
+log_records.append(separator_record_2)
 
-# Add 10-day predictions with expected profit/loss
+# ========================================
+# SECTION 5: 10-DAY PREDICTIONS
+# ========================================
 total_predicted_change = 0
 for i, (date, price) in enumerate(zip(recursive_dates, future_predictions)):
     if i == 0:
@@ -687,62 +694,72 @@ for i, (date, price) in enumerate(zip(recursive_dates, future_predictions)):
     # Determine profit or loss
     profit_loss_label = "Profit" if change > 0 else "Loss"
     
-    log_data.append({
+    pred_record = {
         'Timestamp': date.strftime('%Y-%m-%d'),
         'Stock': f'Day {i+1} Prediction',
         'Current_Price': f"{price:.2f}",
-        'Next_10_Days_Prediction': f"${change:+.2f} ({change_pct:+.2f}%) - {profit_loss_label}"
-    })
+        'Current_Day_Prediction': f"${change:+.2f} ({change_pct:+.2f}%) - {profit_loss_label}",
+        'Accuracy_Rate': '',
+        'Error_Rate': '',
+        'Market_Trend': '',
+        'Profit_Probability': ''
+    }
+    log_records.append(pred_record)
 
-# Add summary
-total_change_pct = (total_predicted_change / current_price) * 100
-log_data.append({
+# ========================================
+# SECTION 6: SUMMARY ROW
+# ========================================
+separator_record_3 = {
     'Timestamp': '--- SUMMARY ---',
     'Stock': '',
     'Current_Price': '',
-    'Next_10_Days_Prediction': ''
-})
+    'Current_Day_Prediction': '',
+    'Accuracy_Rate': '',
+    'Error_Rate': '',
+    'Market_Trend': '',
+    'Profit_Probability': ''
+}
+log_records.append(separator_record_3)
 
-log_data.append({
+total_change_pct = (total_predicted_change / current_price) * 100
+profit_days = sum(1 for i in range(len(future_predictions)) if (future_predictions[i] - (current_price if i == 0 else future_predictions[i-1])) > 0)
+
+summary_record = {
     'Timestamp': 'Total Predicted Change',
     'Stock': f"${total_predicted_change:+.2f}",
     'Current_Price': f"{total_change_pct:+.2f}%",
-    'Next_10_Days_Prediction': f"Final Price: ${future_predictions[-1]:.2f}"
-})
+    'Current_Day_Prediction': f"Final Price: ${future_predictions[-1]:.2f}",
+    'Accuracy_Rate': f"Profit Days: {profit_days}/10",
+    'Error_Rate': f"Loss Days: {10-profit_days}/10",
+    'Market_Trend': '',
+    'Profit_Probability': ''
+}
+log_records.append(summary_record)
 
 # Create DataFrame and save
-df_log = pd.DataFrame(log_data)
+df_log = pd.DataFrame(log_records)
 df_log.to_csv(log_file, index=False)
 
 st.success(f"📋 Prediction log created: **{log_file}**")
-st.info(f"📊 Contains: Metrics + 30 days historical + Current + 10 days predictions")
+st.info(f"📊 Contains: Metadata + 30 days historical + Current + 10 days predictions + Summary")
 
 # Display summary metrics
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("Model Accuracy", f"{test_accuracy:.2f}%")
 with col2:
     st.metric("Error Rate", f"{test_mape:.2f}%")
 with col3:
-    profit_days = sum(1 for i in range(len(future_predictions)) if (future_predictions[i] - (current_price if i == 0 else future_predictions[i-1])) > 0)
     st.metric("Profit Days", f"{profit_days}/10")
+with col4:
+    st.metric("MAE", f"{test_mae:.4f}")
 
-# Download buttons
+# Download prediction log
 with open(log_file, 'rb') as f:
     st.download_button(
-        label="📥 Download Prediction Log",
+        label="📥 Download Prediction Log (with 30-day history)",
         data=f,
         file_name=log_file,
-        mime='text/csv'
-    )
-
-csv_file_path = f"{stock}_dataset.csv"
-df.to_csv(csv_file_path)
-with open(csv_file_path, 'rb') as f:
-    st.download_button(
-        label="📥 Download Historical Dataset",
-        data=f,
-        file_name=csv_file_path,
         mime='text/csv'
     )
 
@@ -769,3 +786,5 @@ if os.path.exists(model_file):
 st.sidebar.markdown("---")
 st.sidebar.subheader("Prediction Settings")
 st.sidebar.info("📊 Based on market volatility")
+st.sidebar.metric("Market Trend", trend_bias)
+st.sidebar.metric("Profit Probability", f"{profit_probability*100:.0f}%")

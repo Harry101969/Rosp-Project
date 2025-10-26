@@ -570,7 +570,28 @@ else:
     st.info("📊 No significant gain or loss expected.")
 
 # ------------------------
-# Create Comprehensive Prediction Log CSV
+# Download Historical Dataset with Proper Structure
+# ------------------------
+st.subheader("📥 Download Files")
+
+# Create historical dataset CSV with proper structure
+csv_file_path = f"{stock}_dataset.csv"
+historical_export = df.copy()
+historical_export = historical_export.reset_index()
+historical_export.columns = ['Date', 'Close']
+historical_export['Date'] = historical_export['Date'].dt.strftime('%Y-%m-%d')
+historical_export.to_csv(csv_file_path, index=False)
+
+with open(csv_file_path, 'rb') as f:
+    st.download_button(
+        label="📥 Download Historical Dataset",
+        data=f,
+        file_name=csv_file_path,
+        mime='text/csv'
+    )
+
+# ------------------------
+# Create Prediction Log CSV with Reference Code Structure
 # ------------------------
 st.subheader("✅ Prediction Log")
 
@@ -578,147 +599,42 @@ st.subheader("✅ Prediction Log")
 log_file = f"{stock}_prediction_log_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 prediction_timestamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-# Get last 30 days of historical data
-last_30_days = df.tail(30).copy().reset_index()
+# Build prediction log matching reference code structure
+log_records = []
 
-# Build comprehensive prediction log
-log_data = []
-
-# Add timestamp row
-log_data.append({
+# Main prediction record with all future dates
+main_record = {
     'Timestamp': prediction_timestamp,
     'Stock': stock,
     'Current_Price': f"{current_price:.2f}",
-    'Next_10_Days_Prediction': ', '.join([f"${p:.2f}" for p in future_predictions])
-})
+    'Current_Day_Prediction': f"{next_day_prediction:.2f}",
+    'Accuracy_Rate': f"{test_accuracy:.2f}%",
+    'Error_Rate': f"{test_mape:.2f}%"
+}
 
-# Add model accuracy metrics
-log_data.append({
-    'Timestamp': 'Model Metrics',
-    'Stock': 'Accuracy',
-    'Current_Price': f"{test_accuracy:.2f}%",
-    'Next_10_Days_Prediction': ''
-})
-
-log_data.append({
-    'Timestamp': 'Model Metrics',
-    'Stock': 'Error Rate',
-    'Current_Price': f"{test_mape:.2f}%",
-    'Next_10_Days_Prediction': ''
-})
-
-log_data.append({
-    'Timestamp': 'Model Metrics',
-    'Stock': 'MAE',
-    'Current_Price': f"{test_mae:.4f}",
-    'Next_10_Days_Prediction': ''
-})
-
-log_data.append({
-    'Timestamp': 'Model Metrics',
-    'Stock': 'MSE',
-    'Current_Price': f"{test_mse:.4f}",
-    'Next_10_Days_Prediction': ''
-})
-
-log_data.append({
-    'Timestamp': 'Model Metrics',
-    'Stock': 'R² Score',
-    'Current_Price': f"{test_r2:.4f}",
-    'Next_10_Days_Prediction': ''
-})
-
-# Add trend analysis
-log_data.append({
-    'Timestamp': 'Trend Analysis',
-    'Stock': 'Market Trend',
-    'Current_Price': trend_bias,
-    'Next_10_Days_Prediction': f"Profit Probability: {profit_probability*100:.0f}%"
-})
-
-# Add separator
-log_data.append({
-    'Timestamp': '--- HISTORICAL DATA (Last 30 Days) ---',
-    'Stock': '',
-    'Current_Price': '',
-    'Next_10_Days_Prediction': ''
-})
-
-# Add last 30 days historical data
-for idx, row in last_30_days.iterrows():
-    hist_price = row['Close']
-    hist_date = row['Date'].strftime('%Y-%m-%d')
-    
-    if idx > 0:
-        prev_price = last_30_days.iloc[idx-1]['Close']
-        change = hist_price - prev_price
-        change_pct = (change / prev_price) * 100
-        change_info = f"${change:+.2f} ({change_pct:+.2f}%)"
-    else:
-        change_info = "N/A"
-    
-    log_data.append({
-        'Timestamp': hist_date,
-        'Stock': 'Historical',
-        'Current_Price': f"{hist_price:.2f}",
-        'Next_10_Days_Prediction': change_info
-    })
-
-# Add separator
-log_data.append({
-    'Timestamp': '--- PREDICTIONS (Next 10 Days) ---',
-    'Stock': '',
-    'Current_Price': '',
-    'Next_10_Days_Prediction': ''
-})
-
-# Add 10-day predictions with expected profit/loss
-total_predicted_change = 0
+# Add future predictions (Date_1 to Date_10, Price_1 to Price_10)
 for i, (date, price) in enumerate(zip(recursive_dates, future_predictions)):
-    if i == 0:
-        prev_price = current_price
-    else:
-        prev_price = future_predictions[i-1]
-    
-    change = price - prev_price
-    change_pct = (change / prev_price) * 100
-    total_predicted_change += change
-    
-    # Determine profit or loss
-    profit_loss_label = "Profit" if change > 0 else "Loss"
-    
-    log_data.append({
-        'Timestamp': date.strftime('%Y-%m-%d'),
-        'Stock': f'Day {i+1} Prediction',
-        'Current_Price': f"{price:.2f}",
-        'Next_10_Days_Prediction': f"${change:+.2f} ({change_pct:+.2f}%) - {profit_loss_label}"
-    })
+    day_number = i + 1
+    main_record[f'Date_{day_number}'] = date.strftime('%Y-%m-%d')
+    main_record[f'Price_{day_number}'] = f"{price:.2f}"
 
-# Add summary
-total_change_pct = (total_predicted_change / current_price) * 100
-log_data.append({
-    'Timestamp': '--- SUMMARY ---',
-    'Stock': '',
-    'Current_Price': '',
-    'Next_10_Days_Prediction': ''
-})
-
-log_data.append({
-    'Timestamp': 'Total Predicted Change',
-    'Stock': f"${total_predicted_change:+.2f}",
-    'Current_Price': f"{total_change_pct:+.2f}%",
-    'Next_10_Days_Prediction': f"Final Price: ${future_predictions[-1]:.2f}"
-})
+log_records.append(main_record)
 
 # Create DataFrame and save
-df_log = pd.DataFrame(log_data)
+df_log = pd.DataFrame(log_records)
+
+# Check if file exists to append or create new
+if os.path.exists(log_file):
+    existing_data = pd.read_csv(log_file)
+    df_log = pd.concat([existing_data, df_log], ignore_index=True)
+
 df_log.to_csv(log_file, index=False)
 
 st.success(f"📋 Prediction log created: **{log_file}**")
-st.info(f"📊 Contains: Metrics + 30 days historical + Current + 10 days predictions")
+st.info(f"📊 Contains: Timestamp + Current Price + 10-day predictions + Accuracy/Error rates")
 
 # Display summary metrics
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("Model Accuracy", f"{test_accuracy:.2f}%")
 with col2:
@@ -726,23 +642,15 @@ with col2:
 with col3:
     profit_days = sum(1 for i in range(len(future_predictions)) if (future_predictions[i] - (current_price if i == 0 else future_predictions[i-1])) > 0)
     st.metric("Profit Days", f"{profit_days}/10")
+with col4:
+    st.metric("MAE", f"{test_mae:.4f}")
 
-# Download buttons
+# Download prediction log
 with open(log_file, 'rb') as f:
     st.download_button(
         label="📥 Download Prediction Log",
         data=f,
         file_name=log_file,
-        mime='text/csv'
-    )
-
-csv_file_path = f"{stock}_dataset.csv"
-df.to_csv(csv_file_path)
-with open(csv_file_path, 'rb') as f:
-    st.download_button(
-        label="📥 Download Historical Dataset",
-        data=f,
-        file_name=csv_file_path,
         mime='text/csv'
     )
 
