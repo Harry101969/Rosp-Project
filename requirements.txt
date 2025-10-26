@@ -1,0 +1,7 @@
+numpy==1.26.4
+pandas==2.2.1
+streamlit==1.31.0
+tensorflow==2.16.1
+scikit-learn==1.4.1.post1
+yfinance==0.2.40
+plotly==5.20.0
