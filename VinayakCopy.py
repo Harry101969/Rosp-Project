@@ -10,7 +10,7 @@ from tensorflow.keras.models import load_model
 import os
 
 # Load the trained model
-model = load_model('stockpricemodel.keras')
+model = load_model('stockpricrosp.keras')
 
 st.title("Stock Price Prediction App")
 

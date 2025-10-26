@@ -34,7 +34,7 @@ class SuppressStderr:
 @st.cache_resource
 def load_trained_model():
     with SuppressStderr():
-        return load_model('stockpricemodel.keras', compile=False)
+        return load_model('stockpricrosp.keras', compile=False)
 
 model = load_trained_model()
 
