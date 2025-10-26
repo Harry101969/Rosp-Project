@@ -8,7 +8,6 @@ import plotly.graph_objects as go
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense
 from tensorflow.keras.optimizers import Adam
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error
 
 # ------------------------
 # Streamlit Configuration
@@ -35,6 +34,7 @@ def get_stock_data(symbol, start, end):
         df = df.sort_index(ascending=True)
         if df.empty:
             return None
+        # Keep only Close price and reset index to have Date as column
         df = df.reset_index()
         df = df[['Date', 'Close']]
         df['Date'] = pd.to_datetime(df['Date'])
@@ -44,6 +44,7 @@ def get_stock_data(symbol, start, end):
         st.error(f"Error: {str(e)}")
         return None
 
+# Download full data for charts
 @st.cache_data(ttl=3600)
 def get_full_stock_data(symbol, start, end):
     try:
@@ -73,6 +74,7 @@ if df_full is not None:
     for span in [20, 50, 100, 200]:
         df_full[f'EMA_{span}'] = df_full['Close'].ewm(span=span, adjust=False).mean()
 
+    # Plot EMAs with Plotly
     def plot_ema(df, ema_short, ema_long):
         fig = go.Figure()
         fig.add_trace(go.Candlestick(
@@ -112,6 +114,7 @@ def df_to_windowed_df(dataframe, n=3):
     dates = []
     X, Y = [], []
     
+    # Start from index n (need n previous values)
     for i in range(n, len(dataframe)):
         df_subset = dataframe.iloc[i-n:i+1]
         
@@ -156,9 +159,11 @@ def train_lstm_model(df, window_size=3):
     """Train LSTM model using windowed approach"""
     st.info("🔄 Training new model... This may take a few minutes.")
     
+    # Create windowed dataframe
     windowed_df = df_to_windowed_df(df, n=window_size)
     dates, X, y = windowed_df_to_date_X_y(windowed_df)
     
+    # Split data: 80% train, 10% validation, 10% test
     q_80 = int(len(dates) * 0.8)
     q_90 = int(len(dates) * 0.9)
     
@@ -166,6 +171,7 @@ def train_lstm_model(df, window_size=3):
     X_val, y_val = X[q_80:q_90], y[q_80:q_90]
     X_test, y_test = X[q_90:], y[q_90:]
     
+    # Build model
     model = Sequential([
         LSTM(64, input_shape=(window_size, 1)),
         Dense(32, activation='relu'),
@@ -179,9 +185,11 @@ def train_lstm_model(df, window_size=3):
         metrics=['mean_absolute_error']
     )
     
+    # Create progress bar
     progress_bar = st.progress(0)
     status_text = st.empty()
     
+    # Train model with progress updates
     epochs = 100
     for epoch in range(epochs):
         history = model.fit(
@@ -192,6 +200,7 @@ def train_lstm_model(df, window_size=3):
             verbose=0
         )
         
+        # Update progress
         progress = (epoch + 1) / epochs
         progress_bar.progress(progress)
         status_text.text(f"Training: {epoch + 1}/{epochs} epochs - Loss: {history.history['loss'][0]:.6f}")
@@ -199,14 +208,17 @@ def train_lstm_model(df, window_size=3):
     progress_bar.empty()
     status_text.empty()
     
+    # Save model
     model.save(model_file)
     
     return model, dates, X, y, q_80, q_90
 
+# Check if model exists
 if os.path.exists(model_file):
     model = load_model(model_file)
     st.success("✅ Model loaded successfully")
     
+    # Prepare data for predictions
     windowed_df = df_to_windowed_df(df, n=window_size)
     dates, X, y = windowed_df_to_date_X_y(windowed_df)
     q_80 = int(len(dates) * 0.8)
@@ -216,6 +228,7 @@ else:
     model, dates, X, y, q_80, q_90 = train_lstm_model(df, window_size)
     st.success("✅ Model trained successfully")
 
+# Split data for visualization
 dates_train, X_train, y_train = dates[:q_80], X[:q_80], y[:q_80]
 dates_val, X_val, y_val = dates[q_80:q_90], X[q_80:q_90], y[q_80:q_90]
 dates_test, X_test, y_test = dates[q_90:], X[q_90:], y[q_90:]
@@ -234,6 +247,7 @@ st.subheader("Model Performance: Prediction vs Actual")
 
 fig_pred = go.Figure()
 
+# Training data
 fig_pred.add_trace(go.Scatter(
     x=dates_train, 
     y=y_train, 
@@ -249,6 +263,7 @@ fig_pred.add_trace(go.Scatter(
     line=dict(color='lightblue', dash='dot')
 ))
 
+# Validation data
 fig_pred.add_trace(go.Scatter(
     x=dates_val, 
     y=y_val, 
@@ -264,6 +279,7 @@ fig_pred.add_trace(go.Scatter(
     line=dict(color='lightgreen', dash='dot')
 ))
 
+# Test data
 fig_pred.add_trace(go.Scatter(
     x=dates_test, 
     y=y_test, 
@@ -291,6 +307,8 @@ st.plotly_chart(fig_pred, use_container_width=True)
 # ------------------------
 # Model Performance Metrics
 # ------------------------
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
 st.subheader("📊 Model Performance Metrics")
 
 col1, col2, col3 = st.columns(3)
@@ -300,172 +318,60 @@ with col1:
     train_mse = mean_squared_error(y_train, train_predictions)
     train_mae = mean_absolute_error(y_train, train_predictions)
     train_r2 = r2_score(y_train, train_predictions)
-    train_mape = mean_absolute_percentage_error(y_train, train_predictions) * 100
-    train_accuracy = 100 - train_mape
     st.metric("MSE", f"{train_mse:.4f}")
     st.metric("MAE", f"{train_mae:.4f}")
     st.metric("R² Score", f"{train_r2:.4f}")
-    st.metric("Accuracy", f"{train_accuracy:.2f}%")
-    st.metric("Error Rate", f"{train_mape:.2f}%")
 
 with col2:
     st.write("**Validation Set:**")
     val_mse = mean_squared_error(y_val, val_predictions)
     val_mae = mean_absolute_error(y_val, val_predictions)
     val_r2 = r2_score(y_val, val_predictions)
-    val_mape = mean_absolute_percentage_error(y_val, val_predictions) * 100
-    val_accuracy = 100 - val_mape
     st.metric("MSE", f"{val_mse:.4f}")
     st.metric("MAE", f"{val_mae:.4f}")
     st.metric("R² Score", f"{val_r2:.4f}")
-    st.metric("Accuracy", f"{val_accuracy:.2f}%")
-    st.metric("Error Rate", f"{val_mape:.2f}%")
 
 with col3:
     st.write("**Test Set:**")
     test_mse = mean_squared_error(y_test, test_predictions)
     test_mae = mean_absolute_error(y_test, test_predictions)
     test_r2 = r2_score(y_test, test_predictions)
-    test_mape = mean_absolute_percentage_error(y_test, test_predictions) * 100
-    test_accuracy = 100 - test_mape
     st.metric("MSE", f"{test_mse:.4f}")
     st.metric("MAE", f"{test_mae:.4f}")
     st.metric("R² Score", f"{test_r2:.4f}")
-    st.metric("Accuracy", f"{test_accuracy:.2f}%")
-    st.metric("Error Rate", f"{test_mape:.2f}%")
 
 # ------------------------
-# Improved 10-Day Forecast with Trend Analysis
+# Recursive 10-Day Forecast
 # ------------------------
 st.subheader("📅 Future Price Prediction (Next 10 Days)")
 
-# Get the last known actual price from data
-current_price = float(df['Close'].iloc[-1])
-current_date = df.index[-1]
-
-# Get last window for prediction
+# Get last window for recursive prediction
 last_window = X_train[-1].copy()
-
-# Generate predictions with controlled changes (0.5 to 5 max difference)
-future_predictions = []
+recursive_predictions = []
 recursive_dates = []
 
-# Base price starts from current actual price
-base_price = current_price
+current_date = df.index[-1]
 
-# ========================================
-# MARKET TREND ANALYSIS
-# ========================================
-# Analyze last 30 days to determine market trend
-recent_prices = df['Close'].tail(30).values
-
-# Calculate trend indicators
-sma_short = np.mean(recent_prices[-5:])  # 5-day average
-sma_long = np.mean(recent_prices[-15:])  # 15-day average
-
-# Determine trend direction
-is_uptrend = sma_short > sma_long
-trend_strength = abs(sma_short - sma_long) / sma_long
-
-# Calculate recent momentum (last 7 days)
-recent_change = (recent_prices[-1] - recent_prices[-7]) / recent_prices[-7]
-momentum_positive = recent_change > 0
-
-# Calculate average daily volatility
-daily_changes = np.diff(recent_prices)
-avg_volatility = np.std(daily_changes)
-max_daily_change = min(max(avg_volatility * 2, 0.5), 5.0)
-
-# Determine bias based on trend and momentum
-if is_uptrend and momentum_positive:
-    trend_bias = "Strong Bullish"
-    profit_probability = 0.70  # 70% chance of profit
-elif is_uptrend or momentum_positive:
-    trend_bias = "Moderate Bullish"
-    profit_probability = 0.60  # 60% chance of profit
-elif not is_uptrend and not momentum_positive:
-    trend_bias = "Strong Bearish"
-    profit_probability = 0.30  # 30% chance of profit
-else:
-    trend_bias = "Moderate Bearish"
-    profit_probability = 0.40  # 40% chance of profit
-
-# Display trend analysis
-st.info(f"📊 **Market Trend Analysis**: {trend_bias} | Profit Probability: {profit_probability*100:.0f}%")
-
-# ========================================
-# GENERATE PREDICTIONS WITH TREND AWARENESS
-# ========================================
 for i in range(10):
-    # Get model's predicted price
-    model_prediction = model.predict(np.array([last_window]), verbose=0)[0][0]
+    # Predict next value
+    next_pred = model.predict(np.array([last_window]), verbose=0)[0][0]
     
-    # Calculate the predicted change from the last value in window
-    last_window_price = last_window[-1][0]
-    predicted_change = model_prediction - last_window_price
+    # Add realistic fluctuation (smaller for more stability)
+    noise = np.random.uniform(-0.01, 0.01) * next_pred  # 1% noise
+    next_pred += noise
     
-    # Apply trend-aware adjustment
-    if is_uptrend:
-        # In uptrend, bias towards positive changes
-        trend_adjustment = np.random.uniform(0.2, 0.8)
-    else:
-        # In downtrend, bias towards negative changes
-        trend_adjustment = np.random.uniform(-0.8, -0.2)
-    
-    # Normalize the predicted change
-    if abs(predicted_change) > max_daily_change:
-        predicted_change = np.sign(predicted_change) * max_daily_change * 0.8
-    
-    # Determine if this day should be profit or loss based on probability
-    should_be_profit = np.random.random() < profit_probability
-    
-    # Calculate base change
-    if abs(predicted_change) > 0.1:
-        base_change = predicted_change + trend_adjustment
-    else:
-        # If model prediction is too small, use trend-based change
-        base_change = np.random.uniform(0.5, 3.0) if should_be_profit else np.random.uniform(-3.0, -0.5)
-    
-    # Apply momentum factor (reduces as we go further into future)
-    momentum_factor = 1.0 - (i * 0.05)  # Reduces by 5% each day
-    base_change = base_change * momentum_factor
-    
-    # Calculate next price
-    next_price = base_price + base_change
-    
-    # CRITICAL: Ensure the change is between 0.5 and 5
-    price_diff = next_price - base_price
-    
-    if abs(price_diff) < 0.5:
-        # If change is too small, make it at least 0.5
-        direction = 1 if should_be_profit else -1
-        next_price = base_price + (direction * np.random.uniform(0.5, 1.5))
-    elif abs(price_diff) > 5.0:
-        # If change is too large, cap it at 5
-        direction = np.sign(price_diff)
-        next_price = base_price + (direction * np.random.uniform(3.0, 5.0))
-    
-    # Ensure we follow the trend bias
-    final_change = next_price - base_price
-    if should_be_profit and final_change < 0:
-        next_price = base_price + np.random.uniform(0.5, 2.5)
-    elif not should_be_profit and final_change > 0:
-        next_price = base_price - np.random.uniform(0.5, 2.5)
-    
-    future_predictions.append(next_price)
+    recursive_predictions.append(next_pred)
     current_date += dt.timedelta(days=1)
     recursive_dates.append(current_date)
     
-    # Update base price and window for next iteration
-    base_price = next_price
+    # Update window: shift left and add new prediction
     last_window = np.roll(last_window, -1, axis=0)
-    last_window[-1] = next_price
+    last_window[-1] = next_pred
 
 # Create future predictions dataframe
 future_df = pd.DataFrame({
     'Date': [d.strftime('%Y-%m-%d') for d in recursive_dates],
-    'Predicted Price': [f"${p:.2f}" for p in future_predictions],
-    'Daily Change': [f"${(future_predictions[i] - (current_price if i == 0 else future_predictions[i-1])):+.2f}" for i in range(10)]
+    'Predicted Price': [f"${p:.2f}" for p in recursive_predictions]
 })
 
 st.dataframe(future_df, use_container_width=True)
@@ -483,19 +389,10 @@ fig_future.add_trace(go.Scatter(
     line=dict(color='blue', width=2)
 ))
 
-# Current price marker
-fig_future.add_trace(go.Scatter(
-    x=[df.index[-1]],
-    y=[current_price],
-    mode='markers',
-    name='Current Price',
-    marker=dict(color='red', size=12, symbol='circle')
-))
-
 # Future predictions
 fig_future.add_trace(go.Scatter(
     x=recursive_dates,
-    y=future_predictions,
+    y=recursive_predictions,
     mode='lines+markers',
     name='Predicted Price',
     line=dict(color='orange', dash='dash', width=2),
@@ -516,7 +413,8 @@ st.plotly_chart(fig_future, use_container_width=True)
 # ------------------------
 st.subheader("📈 Gain/Loss Calculator")
 
-next_day_prediction = future_predictions[0]
+current_price = float(df['Close'].iloc[-1])
+next_day_prediction = recursive_predictions[0]
 profit_loss_pct = ((next_day_prediction - current_price) / current_price) * 100
 
 col1, col2, col3 = st.columns(3)
@@ -560,148 +458,39 @@ else:
     st.info("📊 No significant gain or loss expected.")
 
 # ------------------------
-# Create New Prediction Log CSV with Previous 30 Days
+# Save Prediction Log
 # ------------------------
-log_file = f"{stock}_prediction_log_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+log_file = f"{stock}_prediction_log.csv"
 
-# Get last 30 days of historical data
-last_30_days = df.tail(30).copy()
-last_30_days = last_30_days.reset_index()
-
-# Create historical records
-historical_records = []
-for idx, row in last_30_days.iterrows():
-    hist_record = {
-        'Type': 'Historical',
-        'Date': row['Date'].strftime('%Y-%m-%d'),
-        'Price': f"{row['Close']:.2f}",
-        'Change_From_Previous': '',
-        'Change_Pct': '',
-    }
-    
-    if idx > 0:
-        prev_price = last_30_days.iloc[idx-1]['Close']
-        change = row['Close'] - prev_price
-        change_pct = (change / prev_price) * 100
-        hist_record['Change_From_Previous'] = f"{change:+.2f}"
-        hist_record['Change_Pct'] = f"{change_pct:+.2f}%"
-    
-    historical_records.append(hist_record)
-
-# Create current and future prediction records
-prediction_records = []
-
-# Current day record
-current_record = {
-    'Type': 'Current',
-    'Date': df.index[-1].strftime('%Y-%m-%d'),
-    'Price': f"{current_price:.2f}",
-    'Change_From_Previous': '',
-    'Change_Pct': '',
-}
-prediction_records.append(current_record)
-
-# Future predictions
-for i, (date, price) in enumerate(zip(recursive_dates, future_predictions)):
-    if i == 0:
-        prev_price = current_price
-    else:
-        prev_price = future_predictions[i-1]
-    
-    change = price - prev_price
-    change_pct = (change / prev_price) * 100
-    
-    pred_record = {
-        'Type': 'Predicted',
-        'Date': date.strftime('%Y-%m-%d'),
-        'Price': f"{price:.2f}",
-        'Change_From_Previous': f"{change:+.2f}",
-        'Change_Pct': f"{change_pct:+.2f}%",
-    }
-    prediction_records.append(pred_record)
-
-# Combine all records
-all_records = historical_records + prediction_records
-
-# Add metadata
-metadata = {
-    'Type': 'Metadata',
-    'Date': 'Prediction Timestamp',
-    'Price': dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    'Change_From_Previous': 'Stock Symbol',
-    'Change_Pct': stock,
+record = {
+    'Timestamp': dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    'Stock': stock,
+    'Current_Price': current_price,
+    'Next_Day_Prediction': next_day_prediction,
+    'Expected_Change_Pct': profit_loss_pct,
 }
 
-# Add trend analysis info
-trend_info = {
-    'Type': 'Trend_Analysis',
-    'Date': 'Market Trend',
-    'Price': trend_bias,
-    'Change_From_Previous': 'Profit Probability',
-    'Change_Pct': f"{profit_probability*100:.0f}%",
-}
+# Add 10-day predictions
+for i, (date, price) in enumerate(zip(recursive_dates, recursive_predictions)):
+    record[f'Day_{i+1}_Date'] = date.strftime('%Y-%m-%d')
+    record[f'Day_{i+1}_Price'] = price
 
-# Add model metrics
-model_metrics = {
-    'Type': 'Model_Metrics',
-    'Date': 'Accuracy',
-    'Price': f"{test_accuracy:.2f}%",
-    'Change_From_Previous': 'Error Rate',
-    'Change_Pct': f"{test_mape:.2f}%",
-}
+if os.path.exists(log_file):
+    df_log = pd.read_csv(log_file)
+    df_log = pd.concat([df_log, pd.DataFrame([record])], ignore_index=True)
+else:
+    df_log = pd.DataFrame([record])
 
-model_metrics2 = {
-    'Type': 'Model_Metrics',
-    'Date': 'MAE',
-    'Price': f"{test_mae:.4f}",
-    'Change_From_Previous': 'MSE',
-    'Change_Pct': f"{test_mse:.4f}",
-}
-
-model_metrics3 = {
-    'Type': 'Model_Metrics',
-    'Date': 'R² Score',
-    'Price': f"{test_r2:.4f}",
-    'Change_From_Previous': '',
-    'Change_Pct': '',
-}
-
-# Create final dataframe
-final_records = [metadata, trend_info, model_metrics, model_metrics2, model_metrics3] + all_records
-df_log = pd.DataFrame(final_records)
-
-# Save to CSV
 df_log.to_csv(log_file, index=False)
 
-st.subheader("✅ New Prediction Log Created")
-st.success(f"📋 New log file created: **{log_file}**")
-st.info(f"📊 Contains: 30 days historical data + Current price + 10 days predictions")
-
-# Display summary
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.info(f"📊 Model Accuracy: **{test_accuracy:.2f}%**")
-with col2:
-    st.info(f"⚠️ Model Error Rate: **{test_mape:.2f}%**")
-with col3:
-    st.info(f"📈 Total Records: **{len(all_records)}**")
+st.subheader("✅ Prediction Log Saved")
+st.success(f"Prediction saved at {record['Timestamp']}")
 
 with open(log_file, 'rb') as f:
     st.download_button(
-        label="📥 Download Prediction Log (with 30 days history)",
+        label="📥 Download Prediction Log",
         data=f,
         file_name=log_file,
-        mime='text/csv'
-    )
-
-# Download dataset
-csv_file_path = f"{stock}_dataset.csv"
-df.to_csv(csv_file_path)
-with open(csv_file_path, 'rb') as f:
-    st.download_button(
-        label="📥 Download Complete Historical Dataset",
-        data=f,
-        file_name=csv_file_path,
         mime='text/csv'
     )
 
@@ -721,11 +510,3 @@ if os.path.exists(model_file):
     st.sidebar.success(f"✅ Model loaded: {model_file}")
     file_size = os.path.getsize(model_file) / 1024
     st.sidebar.info(f"Model size: {file_size:.2f} KB")
-    st.sidebar.metric("Model Accuracy", f"{test_accuracy:.2f}%")
-    st.sidebar.metric("Error Rate", f"{test_mape:.2f}%")
-
-# Display prediction constraints
-st.sidebar.markdown("---")
-st.sidebar.subheader("Prediction Settings")
-st.sidebar.info("✅ Daily change range: **$0.50 - $5.00**")
-st.sidebar.info("📊 Based on market volatility")

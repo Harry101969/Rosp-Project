@@ -12,7 +12,7 @@ import requests
 # CONFIGURATION
 # ========================================
 # Get your free API key from: https://polygon.io/
-POLYGON_API_KEY = 'kYxTdT4zPN7X2ysrSb7BOtmzuhVoQxnA'  # Replace with your actual API key
+POLYGON_API_KEY = 'IAdtCEsXYhhc73P532xdF2XY9CzEeWHK'  # Replace with your actual API key
 
 # Load the trained model
 @st.cache_resource
