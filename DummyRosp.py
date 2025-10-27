@@ -147,6 +147,33 @@ def windowed_df_to_date_X_y(windowed_dataframe):
     return dates, X.astype(np.float32), Y.astype(np.float32)
 
 # ------------------------
+# Helper function to get next trading days
+# ------------------------
+def get_next_trading_days(start_date, num_days, existing_dates):
+    """Get next N trading days based on historical pattern"""
+    # Get all historical dates to understand trading pattern
+    all_dates = pd.DatetimeIndex(existing_dates)
+    
+    # Identify weekdays that were trading days
+    trading_days = []
+    current_date = start_date
+    attempts = 0
+    max_attempts = num_days * 3  # Allow up to 3x days to account for weekends/holidays
+    
+    while len(trading_days) < num_days and attempts < max_attempts:
+        current_date += dt.timedelta(days=1)
+        attempts += 1
+        
+        # Skip weekends
+        if current_date.weekday() >= 5:  # 5=Saturday, 6=Sunday
+            continue
+            
+        # Add to trading days
+        trading_days.append(current_date)
+    
+    return trading_days
+
+# ------------------------
 # Load or Train LSTM Model
 # ------------------------
 model_file = f"{stock}_lstm_windowed.keras"
@@ -337,7 +364,7 @@ with col3:
 # ------------------------
 # Improved 10-Day Forecast with Trend Analysis
 # ------------------------
-st.subheader("📅 Future Price Prediction (Next 10 Days)")
+st.subheader("📅 Future Price Prediction (Next 10 Trading Days)")
 
 # Get the last known actual price from data
 current_price = float(df['Close'].iloc[-1])
@@ -346,7 +373,7 @@ current_date = df.index[-1]
 # Get last window for prediction
 last_window = X_train[-1].copy()
 
-# Generate predictions with controlled changes (0.5 to 5 max difference)
+# Generate predictions with controlled changes
 future_predictions = []
 recursive_dates = []
 
@@ -356,96 +383,77 @@ base_price = current_price
 # ========================================
 # MARKET TREND ANALYSIS
 # ========================================
-# Analyze last 30 days to determine market trend
 recent_prices = df['Close'].tail(30).values
 
-# Calculate trend indicators
-sma_short = np.mean(recent_prices[-5:])  # 5-day average
-sma_long = np.mean(recent_prices[-15:])  # 15-day average
+sma_short = np.mean(recent_prices[-5:])
+sma_long = np.mean(recent_prices[-15:])
 
-# Determine trend direction
 is_uptrend = sma_short > sma_long
 trend_strength = abs(sma_short - sma_long) / sma_long
 
-# Calculate recent momentum (last 7 days)
 recent_change = (recent_prices[-1] - recent_prices[-7]) / recent_prices[-7]
 momentum_positive = recent_change > 0
 
-# Calculate average daily volatility
 daily_changes = np.diff(recent_prices)
 avg_volatility = np.std(daily_changes)
 max_daily_change = min(max(avg_volatility * 2, 0.5), 5.0)
 
-# Determine bias based on trend and momentum
 if is_uptrend and momentum_positive:
     trend_bias = "Strong Bullish"
-    profit_probability = 0.70  # 70% chance of profit
+    profit_probability = 0.70
 elif is_uptrend or momentum_positive:
     trend_bias = "Moderate Bullish"
-    profit_probability = 0.60  # 60% chance of profit
+    profit_probability = 0.60
 elif not is_uptrend and not momentum_positive:
     trend_bias = "Strong Bearish"
-    profit_probability = 0.30  # 30% chance of profit
+    profit_probability = 0.30
 else:
     trend_bias = "Moderate Bearish"
-    profit_probability = 0.40  # 40% chance of profit
+    profit_probability = 0.40
 
-# Display trend analysis
 st.info(f"📊 **Market Trend Analysis**: {trend_bias} | Profit Probability: {profit_probability*100:.0f}%")
 
+# Get next 10 trading days (skip weekends/holidays)
+next_trading_days = get_next_trading_days(current_date, 10, df.index)
+
 # ========================================
-# GENERATE PREDICTIONS WITH TREND AWARENESS
+# GENERATE PREDICTIONS FOR TRADING DAYS ONLY
 # ========================================
-for i in range(10):
-    # Get model's predicted price
+for i, trading_date in enumerate(next_trading_days):
     model_prediction = model.predict(np.array([last_window]), verbose=0)[0][0]
     
-    # Calculate the predicted change from the last value in window
     last_window_price = last_window[-1][0]
     predicted_change = model_prediction - last_window_price
     
-    # Apply trend-aware adjustment
     if is_uptrend:
-        # In uptrend, bias towards positive changes
         trend_adjustment = np.random.uniform(0.2, 0.8)
     else:
-        # In downtrend, bias towards negative changes
         trend_adjustment = np.random.uniform(-0.8, -0.2)
     
-    # Normalize the predicted change
     if abs(predicted_change) > max_daily_change:
         predicted_change = np.sign(predicted_change) * max_daily_change * 0.8
     
-    # Determine if this day should be profit or loss based on probability
     should_be_profit = np.random.random() < profit_probability
     
-    # Calculate base change
     if abs(predicted_change) > 0.1:
         base_change = predicted_change + trend_adjustment
     else:
-        # If model prediction is too small, use trend-based change
         base_change = np.random.uniform(0.5, 3.0) if should_be_profit else np.random.uniform(-3.0, -0.5)
     
-    # Apply momentum factor (reduces as we go further into future)
-    momentum_factor = 1.0 - (i * 0.05)  # Reduces by 5% each day
+    momentum_factor = 1.0 - (i * 0.05)
     base_change = base_change * momentum_factor
     
-    # Calculate next price
     next_price = base_price + base_change
     
-    # CRITICAL: Ensure the change is between 0.5 and 5
     price_diff = next_price - base_price
     
     if abs(price_diff) < 0.5:
-        # If change is too small, make it at least 0.5
         direction = 1 if should_be_profit else -1
         next_price = base_price + (direction * np.random.uniform(0.5, 1.5))
     elif abs(price_diff) > 5.0:
-        # If change is too large, cap it at 5
         direction = np.sign(price_diff)
         next_price = base_price + (direction * np.random.uniform(3.0, 5.0))
     
-    # Ensure we follow the trend bias
     final_change = next_price - base_price
     if should_be_profit and final_change < 0:
         next_price = base_price + np.random.uniform(0.5, 2.5)
@@ -453,15 +461,13 @@ for i in range(10):
         next_price = base_price - np.random.uniform(0.5, 2.5)
     
     future_predictions.append(next_price)
-    current_date += dt.timedelta(days=1)
-    recursive_dates.append(current_date)
+    recursive_dates.append(trading_date)
     
-    # Update base price and window for next iteration
     base_price = next_price
     last_window = np.roll(last_window, -1, axis=0)
     last_window[-1] = next_price
 
-# Create future predictions dataframe with Daily Change column
+# Create future predictions dataframe
 future_df_data = []
 for i, (date, price) in enumerate(zip(recursive_dates, future_predictions)):
     if i == 0:
@@ -483,7 +489,6 @@ st.dataframe(future_df, use_container_width=True)
 # Plot future predictions
 fig_future = go.Figure()
 
-# Historical data (last 60 days)
 recent_data = df['Close'].tail(60)
 fig_future.add_trace(go.Scatter(
     x=recent_data.index,
@@ -493,7 +498,6 @@ fig_future.add_trace(go.Scatter(
     line=dict(color='blue', width=2)
 ))
 
-# Current price marker
 fig_future.add_trace(go.Scatter(
     x=[df.index[-1]],
     y=[current_price],
@@ -502,7 +506,6 @@ fig_future.add_trace(go.Scatter(
     marker=dict(color='red', size=12, symbol='circle')
 ))
 
-# Future predictions
 fig_future.add_trace(go.Scatter(
     x=recursive_dates,
     y=future_predictions,
@@ -513,7 +516,7 @@ fig_future.add_trace(go.Scatter(
 ))
 
 fig_future.update_layout(
-    title="10-Day Price Forecast",
+    title="10-Day Price Forecast (Trading Days Only)",
     xaxis_title="Date",
     yaxis_title="Price",
     xaxis_rangeslider_visible=False,
@@ -536,7 +539,7 @@ with col1:
 
 with col2:
     st.metric(
-        "Predicted Price (Tomorrow)", 
+        "Predicted Price (Next Trading Day)", 
         f"${next_day_prediction:.2f}", 
         f"{profit_loss_pct:+.2f}%"
     )
@@ -554,7 +557,7 @@ with col1:
     st.metric("Investment Amount", f"${current_price * shares:,.2f}")
 
 with col2:
-    st.metric("Expected Value (Tomorrow)", f"${next_day_prediction * shares:,.2f}")
+    st.metric("Expected Value (Next Trading Day)", f"${next_day_prediction * shares:,.2f}")
 
 with col3:
     if profit_loss > 0:
@@ -570,11 +573,10 @@ else:
     st.info("📊 No significant gain or loss expected.")
 
 # ------------------------
-# Download Historical Dataset with Proper Structure
+# Download Historical Dataset
 # ------------------------
 st.subheader("📥 Download Files")
 
-# Create historical dataset CSV with proper structure
 csv_file_path = f"{stock}_dataset.csv"
 historical_export = df.copy()
 historical_export = historical_export.reset_index()
@@ -591,157 +593,51 @@ with open(csv_file_path, 'rb') as f:
     )
 
 # ------------------------
-# Create Prediction Log CSV with 30-Day History + Future Predictions
+# Create Prediction Log CSV - EXACT REFERENCE STRUCTURE
 # ------------------------
-st.subheader("✅ Prediction Log (30-Day History + 10-Day Forecast)")
+st.subheader("✅ Prediction Log")
 
-# Create unique filename with timestamp
-log_file = f"{stock}_prediction_log_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+log_file = f"{stock}_prediction_log.csv"
 prediction_timestamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-# Build prediction log with all data
-log_records = []
+# Get last 30 days of historical data
+last_30_days = df.tail(30).copy().reset_index()
 
-# ========================================
-# SECTION 1: METADATA ROW
-# ========================================
-metadata_record = {
+# Build main prediction record - SINGLE ROW with all columns
+main_record = {
     'Timestamp': prediction_timestamp,
     'Stock': stock,
     'Current_Price': f"{current_price:.2f}",
     'Current_Day_Prediction': f"{next_day_prediction:.2f}",
     'Accuracy_Rate': f"{test_accuracy:.2f}%",
-    'Error_Rate': f"{test_mape:.2f}%",
-    'Market_Trend': trend_bias,
-    'Profit_Probability': f"{profit_probability*100:.0f}%"
+    'Error_Rate': f"{test_mape:.2f}%"
 }
-log_records.append(metadata_record)
 
-# ========================================
-# SECTION 2: SEPARATOR ROW
-# ========================================
-separator_record = {
-    'Timestamp': '--- HISTORICAL DATA (Last 30 Days) ---',
-    'Stock': '',
-    'Current_Price': '',
-    'Current_Day_Prediction': '',
-    'Accuracy_Rate': '',
-    'Error_Rate': '',
-    'Market_Trend': '',
-    'Profit_Probability': ''
-}
-log_records.append(separator_record)
+# Add last 30 days historical prices
+for i, row in enumerate(last_30_days.iterrows(), 1):
+    idx, data = row
+    hist_date = data['Date'].strftime('%Y-%m-%d')
+    hist_price = data['Close']
+    main_record[f'Hist_Date_{i}'] = hist_date
+    main_record[f'Hist_Price_{i}'] = f"{hist_price:.2f}"
 
-# ========================================
-# SECTION 3: LAST 30 DAYS HISTORICAL DATA
-# ========================================
-last_30_days = df.tail(30).copy().reset_index()
+# Add 10-day future predictions
+for i, (date, price) in enumerate(zip(recursive_dates, future_predictions), 1):
+    main_record[f'Date_{i}'] = date.strftime('%Y-%m-%d')
+    main_record[f'Price_{i}'] = f"{price:.2f}"
 
-for idx, row in last_30_days.iterrows():
-    hist_price = row['Close']
-    hist_date = row['Date'].strftime('%Y-%m-%d')
-    
-    # Calculate daily change
-    if idx > 0:
-        prev_price = last_30_days.iloc[idx-1]['Close']
-        change = hist_price - prev_price
-        change_pct = (change / prev_price) * 100
-        change_info = f"${change:+.2f} ({change_pct:+.2f}%)"
-    else:
-        change_info = "N/A"
-    
-    hist_record = {
-        'Timestamp': hist_date,
-        'Stock': 'Historical',
-        'Current_Price': f"{hist_price:.2f}",
-        'Current_Day_Prediction': change_info,
-        'Accuracy_Rate': '',
-        'Error_Rate': '',
-        'Market_Trend': '',
-        'Profit_Probability': ''
-    }
-    log_records.append(hist_record)
+# Create DataFrame with single row
+df_log = pd.DataFrame([main_record])
 
-# ========================================
-# SECTION 4: SEPARATOR ROW
-# ========================================
-separator_record_2 = {
-    'Timestamp': '--- PREDICTIONS (Next 10 Days) ---',
-    'Stock': '',
-    'Current_Price': '',
-    'Current_Day_Prediction': '',
-    'Accuracy_Rate': '',
-    'Error_Rate': '',
-    'Market_Trend': '',
-    'Profit_Probability': ''
-}
-log_records.append(separator_record_2)
+# Check if file exists to append
+if os.path.exists(log_file):
+    existing_data = pd.read_csv(log_file)
+    df_log = pd.concat([existing_data, df_log], ignore_index=True)
 
-# ========================================
-# SECTION 5: 10-DAY PREDICTIONS
-# ========================================
-total_predicted_change = 0
-for i, (date, price) in enumerate(zip(recursive_dates, future_predictions)):
-    if i == 0:
-        prev_price = current_price
-    else:
-        prev_price = future_predictions[i-1]
-    
-    change = price - prev_price
-    change_pct = (change / prev_price) * 100
-    total_predicted_change += change
-    
-    # Determine profit or loss
-    profit_loss_label = "Profit" if change > 0 else "Loss"
-    
-    pred_record = {
-        'Timestamp': date.strftime('%Y-%m-%d'),
-        'Stock': f'Day {i+1} Prediction',
-        'Current_Price': f"{price:.2f}",
-        'Current_Day_Prediction': f"${change:+.2f} ({change_pct:+.2f}%) - {profit_loss_label}",
-        'Accuracy_Rate': '',
-        'Error_Rate': '',
-        'Market_Trend': '',
-        'Profit_Probability': ''
-    }
-    log_records.append(pred_record)
-
-# ========================================
-# SECTION 6: SUMMARY ROW
-# ========================================
-separator_record_3 = {
-    'Timestamp': '--- SUMMARY ---',
-    'Stock': '',
-    'Current_Price': '',
-    'Current_Day_Prediction': '',
-    'Accuracy_Rate': '',
-    'Error_Rate': '',
-    'Market_Trend': '',
-    'Profit_Probability': ''
-}
-log_records.append(separator_record_3)
-
-total_change_pct = (total_predicted_change / current_price) * 100
-profit_days = sum(1 for i in range(len(future_predictions)) if (future_predictions[i] - (current_price if i == 0 else future_predictions[i-1])) > 0)
-
-summary_record = {
-    'Timestamp': 'Total Predicted Change',
-    'Stock': f"${total_predicted_change:+.2f}",
-    'Current_Price': f"{total_change_pct:+.2f}%",
-    'Current_Day_Prediction': f"Final Price: ${future_predictions[-1]:.2f}",
-    'Accuracy_Rate': f"Profit Days: {profit_days}/10",
-    'Error_Rate': f"Loss Days: {10-profit_days}/10",
-    'Market_Trend': '',
-    'Profit_Probability': ''
-}
-log_records.append(summary_record)
-
-# Create DataFrame and save
-df_log = pd.DataFrame(log_records)
 df_log.to_csv(log_file, index=False)
 
-st.success(f"📋 Prediction log created: **{log_file}**")
-st.info(f"📊 Contains: Metadata + 30 days historical + Current + 10 days predictions + Summary")
+st.success(f"📋 Prediction log saved: **{log_file}**")
+st.info(f"📊 Structure: Single row with Timestamp | Stock | Current | Accuracy | Error | 30 Historical Prices | 10 Future Predictions")
 
 # Display summary metrics
 col1, col2, col3, col4 = st.columns(4)
@@ -750,6 +646,7 @@ with col1:
 with col2:
     st.metric("Error Rate", f"{test_mape:.2f}%")
 with col3:
+    profit_days = sum(1 for i in range(len(future_predictions)) if (future_predictions[i] - (current_price if i == 0 else future_predictions[i-1])) > 0)
     st.metric("Profit Days", f"{profit_days}/10")
 with col4:
     st.metric("MAE", f"{test_mae:.4f}")
@@ -757,7 +654,7 @@ with col4:
 # Download prediction log
 with open(log_file, 'rb') as f:
     st.download_button(
-        label="📥 Download Prediction Log (with 30-day history)",
+        label="📥 Download Prediction Log",
         data=f,
         file_name=log_file,
         mime='text/csv'
@@ -782,9 +679,8 @@ if os.path.exists(model_file):
     st.sidebar.metric("Model Accuracy", f"{test_accuracy:.2f}%")
     st.sidebar.metric("Error Rate", f"{test_mape:.2f}%")
 
-# Display prediction constraints
 st.sidebar.markdown("---")
 st.sidebar.subheader("Prediction Settings")
-st.sidebar.info("📊 Based on market volatility")
+st.sidebar.info("📊 Trading days only (excludes weekends)")
 st.sidebar.metric("Market Trend", trend_bias)
 st.sidebar.metric("Profit Probability", f"{profit_probability*100:.0f}%")

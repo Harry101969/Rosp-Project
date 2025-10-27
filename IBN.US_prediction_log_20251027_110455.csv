@@ -1,0 +1,2 @@
+Timestamp,Stock,Current_Price,Current_Day_Prediction,Accuracy_Rate,Error_Rate,Date_1,Price_1,Date_2,Price_2,Date_3,Price_3,Date_4,Price_4,Date_5,Price_5,Date_6,Price_6,Date_7,Price_7,Date_8,Price_8,Date_9,Price_9,Date_10,Price_10
+2025-10-27 11:04:55,IBN.US,31.25,30.41,87.53%,12.47%,2025-10-25,30.41,2025-10-26,28.96,2025-10-27,30.10,2025-10-28,28.96,2025-10-29,30.67,2025-10-30,29.90,2025-10-31,28.80,2025-11-01,30.00,2025-11-02,30.73,2025-11-03,29.91

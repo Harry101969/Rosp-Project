@@ -1,0 +1,2 @@
+Timestamp,Stock,Current_Price,Current_Day_Prediction,Accuracy_Rate,Error_Rate,Date_1,Price_1,Date_2,Price_2,Date_3,Price_3,Date_4,Price_4,Date_5,Price_5,Date_6,Price_6,Date_7,Price_7,Date_8,Price_8,Date_9,Price_9,Date_10,Price_10
+2025-10-27 10:57:38,TSLA,433.72,434.79,95.37%,4.63%,2025-10-25,434.79,2025-10-26,431.66,2025-10-27,433.27,2025-10-28,434.49,2025-10-29,436.40,2025-10-30,438.54,2025-10-31,435.94,2025-11-01,437.52,2025-11-02,438.88,2025-11-03,441.11
